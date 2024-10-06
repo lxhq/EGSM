@@ -1,0 +1,21 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "CUDA C++: Launch",
+            "type": "cuda-gdb",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/EGSM",
+            "args": [
+                "-q ${workspaceFolder}/dataset/dblp/label_16/query_graph/12/Q_1 -d ${workspaceFolder}/dataset/dblp/label_16/data.graph"
+            ],
+            "miDebuggerPath": "/usr/local/cuda/bin/cuda-gdb",  // Path to cuda-gdb
+            // "environment": [
+            //     {
+            //         "name": "LD_LIBRARY_PATH",
+            //         "value": "/root/Documents/workspace/SubgraphMatchGPU/lib/cnmem/build:${env:LD_LIBRARY_PATH}"
+            //     }
+            // ],
+        }
+    ]
+}

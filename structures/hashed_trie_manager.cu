@@ -35,6 +35,7 @@ HashedTrieManager::HashedTrieManager(
 , neighbor_flags_{nullptr, nullptr}
 {
     // 1. build q_edges
+    // q_edges_ contains NUM_EQ * 2 elements, (from, to) and (to, from) are both in q_edges
     uint8_t edge_pos = 0u;
     for (uint32_t i = 0u; i < NUM_VQ * NUM_VQ; i++)
     {
@@ -43,10 +44,17 @@ HashedTrieManager::HashedTrieManager(
             q_edges_[edge_pos++] = {i / NUM_VQ, i % NUM_VQ};
         }
     }
-
     // 2. allocate buffers.
     const uint32_t NUM_TRIES = NUM_EQ * 2 + 1;
     cudaErrorCheck(cudaMalloc(&tries.buffer_, sizeof(uint32_t) * NUM_TRIES * 4));
+
+    // tries._num_candidates_,               Number of candidated data vertices for each query vertex      length = NUM_VQ
+    // tries._compacted_vs_sizes_,           Number of candidates keys for each query edges                length = NUM_EQ * 2
+    // tries._num_buckets_,                  Number of buckets for each query edge: _num_candidates_ / 8   length = NUM_EQ * 2
+    // tries._hash_table_offs_,              Offset of each query edge's buckets                           length = NUM_EQ * 2, _hash_table_offs_[i + 1] = _hash_table_offs_[i] + _num_buckets_[i] * BUCKET_DIM;
+    // compacted_vs_temp_,                   Candidate data vertices for each query vertex:                length =  NUM_VQ * C_MAX_L_FREQ, all candidates are stored in the column (C_MAX_L_FREQ)
+    // tries.compacted_vs_,
+
     tries.num_candidates_     = tries.buffer_;
     tries.compacted_vs_sizes_ = tries.num_candidates_       + NUM_TRIES;
     tries.num_buckets_        = tries.compacted_vs_sizes_   + NUM_TRIES;
@@ -80,7 +88,9 @@ HashedTrieManager::HashedTrieManager(
     cudaErrorCheck(cudaMemcpy(query_nlf, h_query_nlf, sizeof(uint32_t) * NUM_VQ * NUM_LQ, cudaMemcpyHostToDevice));
 
 
-    // 4. get the candidate vertices for each query vertex. 
+    // 4. get the candidate vertices for each query vertex.
+    // The whole task is divided for each warp, each warp add 32 atomically to progress
+    // progress keeps track of the whole "progress" of the warp
     uint32_t *progress;
     cudaErrorCheck(cudaMalloc(&progress, sizeof(uint32_t) * 3));
     cudaErrorCheck(cudaMemset(progress, 0u, sizeof(uint32_t) * 3));
@@ -493,6 +503,8 @@ void HashedTrieManager::Filter(
     cudaErrorCheck(cudaFree(num_selected_out_temp));
 }
 
+// For the first query vertex, it may contains multiple neighbors (query edges)
+// This function selects the query edge with the smallest number of candidates
 uint8_t HashedTrieManager::GetFirstMinOff(const uint32_t first_u) const
 {
     uint8_t first_u_min_off;

@@ -37,8 +37,8 @@ public:
 class GraphUtils
 {
 public:
-    uint8_t eidx_[MAX_VCOUNT * MAX_VCOUNT];
-    uint16_t nbrbits_[MAX_VCOUNT];
+    uint8_t eidx_[MAX_VCOUNT * MAX_VCOUNT];   // if two query vertices (a, b) are connected, the edge id is stored in eidx_[a * MAX_VCOUNT + b]
+    uint16_t nbrbits_[MAX_VCOUNT];            // if a query vertex has a neighbor, the corresponding bit is set in nbrbits_
 public:
     void Set(const Graph& g);
 };

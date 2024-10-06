@@ -17,11 +17,16 @@ __global__ void compareNLF(
     uint32_t *candidate_buffer,
     uint32_t *num_candidates
 ) {
+    // each warp is processing 32 data vertex at a time
+    // however, each data vertex is processed one by one
+    // 32 threads in a warp are used to check different neighbors of current data vertex parallelly
+    // the nlf of current processing data vertex
     __shared__ uint32_t local_nlf[WARP_PER_BLOCK][MAX_VCOUNT];
-    __shared__ uint32_t s_query_nlf[MAX_VCOUNT * MAX_VCOUNT];
-    __shared__ uint32_t v_start[WARP_PER_BLOCK];
+    __shared__ uint32_t s_query_nlf[MAX_VCOUNT * MAX_VCOUNT]; // copy the query nlf to shared memory
+    __shared__ uint32_t v_start[WARP_PER_BLOCK]; // the start vertex of each warp
+    // MAX_VCOUNT represents a query vertex, it is "1....1",(32 1bits), if a data vertex is not a candidate, the corresponding bit is set to 0
     __shared__ uint32_t local_flags[WARP_PER_BLOCK][MAX_VCOUNT];
-    __shared__ uint32_t local_num_candidates[WARP_PER_BLOCK][MAX_VCOUNT];
+    __shared__ uint32_t local_num_candidates[WARP_PER_BLOCK][MAX_VCOUNT]; // The number of candidates of each query vertex
 
     uint32_t warp_id = threadIdx.x / WARP_SIZE;
     uint32_t lane_id = threadIdx.x % WARP_SIZE;
@@ -110,11 +115,11 @@ __global__ void compareNLF(
 }
 
 __global__ void buildHashKeys(
-    const uint32_t *in,
-    const uint32_t in_size,
-    uint32_t *keys0,
-    uint32_t *keys1,
-    const uint32_t num_bucket,
+    const uint32_t *in,         // candidate vertices
+    const uint32_t in_size,     // number of candidate vertices
+    uint32_t *keys0,            // start position of the hash table 1
+    uint32_t *keys1,            // start position of the hash table 2
+    const uint32_t num_bucket,  // number of buckets used
     const uint32_t C0,
     const uint32_t C1,
     const uint32_t C2,
@@ -123,11 +128,11 @@ __global__ void buildHashKeys(
     uint32_t *success
 ) {
     // a warp inserts at most 4 keys to the hash table at a time
-    __shared__ uint32_t v[WARP_PER_BLOCK][4];
-    __shared__ uint32_t bucket_index[WARP_PER_BLOCK][4];
+    __shared__ uint32_t v[WARP_PER_BLOCK][4]; // The candidate vertices to be inserted in each warp
+    __shared__ uint32_t bucket_index[WARP_PER_BLOCK][4]; // The bucket index of the candidate vertices for each warp
     __shared__ uint32_t table_index[WARP_PER_BLOCK][4];
 
-    __shared__ uint32_t idx_start[WARP_PER_BLOCK];
+    __shared__ uint32_t idx_start[WARP_PER_BLOCK]; // The start position of the candidate vertices for each warp
     __shared__ uint32_t nloops[WARP_PER_BLOCK];
 
     __shared__ uint32_t *keys[2];

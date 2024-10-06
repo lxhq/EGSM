@@ -476,15 +476,15 @@ __global__ void joinDFSGroupKernelKernel(
 
 
 __global__ void joinDFSGroupKernel(
-    PoolElem res,
-    unsigned long long int res_size,
-    PoolElem new_res,
-    unsigned long long int max_new_res_size,
-    unsigned long long int *new_res_size,
-    InitialOrder initial_order,
-    uint8_t next_u,
-    uint8_t next_u_min_off,
-    uint8_t max_depth,
+    PoolElem res,                               // pointer to the partial matching from the previous level
+    unsigned long long int res_size,            // size of the partial matching from the previous level
+    PoolElem new_res,                           // pointer to the storage of new matching results
+    unsigned long long int max_new_res_size,    // maximum size of the new matching results
+    unsigned long long int *new_res_size,       // pointer to the actual size of the new matching results
+    InitialOrder initial_order,                 // all mapped vertices are be stored in initial_order.u[], started from u[0], u[1], ...
+    uint8_t next_u,                             // next query vertex to be mapped, UINT8_MAX if undefined
+    uint8_t next_u_min_off,                     // next query edge to be mapped, UINT8_MAX if undefined
+    uint8_t max_depth,                          // number of maped vertices
     bool only_one_group,
     uint32_t *pending_count,
     uint32_t *lb_triggered
@@ -526,7 +526,7 @@ __global__ void joinDFSGroupKernel(
     uint32_t lane_id = threadIdx.x % WARP_SIZE;
     uint32_t cur_v;
 
-    if (global_warp_id >= res_size)
+    if (global_warp_id >= res_size)    // each warp picks an old partial result, retuen if the result is out of range
     {
         return;
     }
@@ -563,9 +563,9 @@ __global__ void joinDFSGroupKernel(
         __syncwarp();
         if (lane_id == 0)
         {
-            mapped_vs[warp_id] = bitmap;
-            initial_depth[warp_id] = __popc(mapped_vs[warp_id]);
-            depth[warp_id] = __popc(mapped_vs[warp_id]);
+            mapped_vs[warp_id] = bitmap;                               // all mapped vertices are set to 1
+            initial_depth[warp_id] = __popc(mapped_vs[warp_id]);       // total number of mapped vertices
+            depth[warp_id] = __popc(mapped_vs[warp_id]);               // total number of mapped vertices
             mask_index[warp_id] = 0;
         }
         __syncwarp();
@@ -582,10 +582,10 @@ __global__ void joinDFSGroupKernel(
     if (lane_id < C_NUM_VQ)
     {
         queue_pos[warp_id][lane_id] = 
-            ((1 << lane_id) & mapped_vs[warp_id]) ?
+            ((1 << lane_id) & mapped_vs[warp_id]) ?    // queue_pos[warp_id][mapped_vertex_id] = mapped_vertex_id, otherwise 0
             lane_id : 0u;
         queue_size[warp_id][lane_id] = 
-            ((1 << lane_id) & mapped_vs[warp_id]) ?
+            ((1 << lane_id) & mapped_vs[warp_id]) ?    // queue_size[warp_id][mapped_vertex_id] = mapped_vertex_id + 1, otherwise 0
             lane_id + 1 : 0u;
         start[warp_id][lane_id] = 0u;
         min_offs[warp_id][lane_id] = UINT8_MAX;

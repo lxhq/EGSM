@@ -44,8 +44,8 @@ __device__ uint2 HashedTries::HashSearch(
         {
             if (bucket_uint32[j] == key)
             {
-                result.y = i;
-                result.x = hash_value * BUCKET_DIM + j;
+                result.y = i;                                  // the trie index (1st trie or 2nd trie)
+                result.x = hash_value * BUCKET_DIM + j;        // the position of the key in the whole buffer
                 return result;
             }
         }

@@ -10,6 +10,13 @@ struct HashedTries
     // compacted_vs_sizes_, compacted_vs_offs_,
     // and hash_keys_offs_.
     uint32_t *buffer_;
+
+    // tries._num_candidates_,               Number of candidated data vertices for each query vertex      length = NUM_VQ
+    // tries._compacted_vs_sizes_,           Number of candidates keys for each query edges                length = NUM_EQ * 2
+    // tries._num_buckets_,                  Number of buckets for each query edge: _num_candidates_ / 8   length = NUM_EQ * 2
+    // tries._hash_table_offs_,              Offset of each query edge's buckets                           length = NUM_EQ * 2, _hash_table_offs_[i + 1] = _hash_table_offs_[i] + _num_buckets_[i] * BUCKET_DIM;
+    // compacted_vs_temp_,                   Candidate data vertices for each query vertex:                length =  NUM_VQ * C_MAX_L_FREQ, all candidates are stored in the column (C_MAX_L_FREQ)
+
     uint32_t *num_candidates_;
     uint32_t *compacted_vs_sizes_;
     uint32_t *num_buckets_;

@@ -171,9 +171,9 @@ __forceinline__ __device__ void set_next_u(
 
 
 __forceinline__ __device__ void map_new_v(
-    uint32_t u, 
-    uint32_t v, 
-    uint16_t mapped_vs,
+    uint32_t u,                                            // the mapped query vertex
+    uint32_t v,                                            // the data vertex that the query vertex u is mapped to
+    uint16_t mapped_vs,                                    // all mapped query vertices, bitmap, 1 means mapped
     uint32_t *intersection_input[MAX_ECOUNT * 2],
     uint32_t intersection_input_sizes[MAX_ECOUNT * 2],
     const GraphUtils& s_utils,
@@ -182,27 +182,27 @@ __forceinline__ __device__ void map_new_v(
 ) {
     if (
         (lane_id < MAX_VCOUNT) && 
-        ((1 << lane_id) & (~mapped_vs) & s_utils.nbrbits_[u]))
+        ((1 << lane_id) & (~mapped_vs) & s_utils.nbrbits_[u]))                   // query vertex lane_id is not mapped yet and it is a neighbor of u
     {
         // find the neighbor array
-        uint32_t local_off = s_utils.eidx_[u * C_NUM_VQ + lane_id];
-        uint32_t reversed_local_off = s_utils.eidx_[lane_id * C_NUM_VQ + u];
-        uint2 res = tries.HashSearch(local_off, v);
+        uint32_t local_off = s_utils.eidx_[u * C_NUM_VQ + lane_id];              // get the edge id: (u, u_nbr)'s id
+        uint32_t reversed_local_off = s_utils.eidx_[lane_id * C_NUM_VQ + u];     // get the reversed edge id: (u_bnr, u)'s id
+        uint2 res = tries.HashSearch(local_off, v);                              // get the hash position of v in (u, u_nbr)'s trie
 #ifdef DEBUG
         printf("lane_id=%u, v=%u, local_off=%u, reversed=%u, res=(%u,%u)\n",
             lane_id, v, local_off, reversed_local_off, res.x, res.y);
 #endif
 
-        intersection_input_sizes[reversed_local_off] = 
-            res.x == UINT32_MAX ?
-            0u : tries.values_[res.y][
+        intersection_input_sizes[reversed_local_off] =                           // reversed_local_off is different for different lane
+            res.x == UINT32_MAX ?                                                // the intersection_input_sizes is filled by mapped query vertices
+            0u : tries.values_[res.y][                                           // store the size of v's neighbors in (u, u_nbr)'s candidates list
                 (tries.hash_table_offs_[local_off] + res.x) * 2 + 1
-            ];
+            ];                                                                   // the number of candidate data edges for the v's neighbors according to u's neighbors
         intersection_input[reversed_local_off] =
             res.x == UINT32_MAX ?
-            NULL : tries.neighbors_[res.y] + tries.values_[res.y][
+            NULL : tries.neighbors_[res.y] + tries.values_[res.y][               // store the pointer to the neighbors of v in (u, u_nbr)'s candidates list
                 (tries.hash_table_offs_[local_off] + res.x) * 2
-            ];
+            ];                                                                   // pointer to the candidate data edges for the v's neighbors according to u's neighbors
 #ifdef DEBUG
         printf("lane_id=%u, size=%u, intersection_input=%u\n", 
             lane_id, intersection_input_sizes[reversed_local_off], 

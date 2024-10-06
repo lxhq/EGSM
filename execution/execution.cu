@@ -64,6 +64,7 @@ void matchDFSGroup(
     // initialize temp variables
     uint8_t first_u = plan.start_vertex_id_;
     uint32_t first_min_off = manager.GetFirstMinOff(plan.start_vertex_id_);
+    // all mapped vertices will be stored in initial_order.u[]
     InitialOrder initial_order;
     memset(&initial_order, UINT8_MAX, sizeof(uint8_t) * MAX_VCOUNT);
     uint32_t *lb_triggered;
@@ -78,6 +79,10 @@ void matchDFSGroup(
     cudaErrorCheck(cudaDeviceSynchronize());
 
     uint32_t num_finished_groups = 0u;
+    // I guess vs means vertex set
+    // num_mapped_vs is the number of visited query vetices + number of vertices will be visited in the next group
+    // num_mapped_vs += popc(plan.masks_[num_finished_groups]);
+    // The max result size = pool.GetFree() / num_mapped_vs;
     uint32_t num_mapped_vs = 1u, old_num_mapped_vs = 1u;
     uint32_t h_max_new_res_size = pool.GetFree();
 
