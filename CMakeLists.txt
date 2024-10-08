@@ -7,7 +7,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED True)
-set(CMAKE_BUILD_TYPE RELEASE)
+# set(CMAKE_BUILD_TYPE RELEASE)
+set(CMAKE_BUILD_TYPE DEBUG)
 
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(/usr/local/cuda-11.7/include)
@@ -51,7 +52,7 @@ add_library(link STATIC
     execution/execution.h execution/execution.cu)
 
 set_target_properties(link PROPERTIES
-    CUDA_ARCHITECTURES "70"
+    CUDA_ARCHITECTURES "86"
     CUDA_SEPARABLE_COMPILATION ON
     POSITION_INDEPENDENT_CODE ON)
 
@@ -70,7 +71,7 @@ add_executable(EGSM
     graph/operations.cpp)
 
 set_target_properties(EGSM PROPERTIES
-    CUDA_ARCHITECTURES "70"
+    CUDA_ARCHITECTURES "86"
     CUDA_SEPARABLE_COMPILATION ON
     POSITION_INDEPENDENT_CODE ON)
 
@@ -78,6 +79,7 @@ target_compile_options(EGSM PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
     --generate-line-info
     -Xptxas=\"-v\"
     -DTHRUST_IGNORE_CUB_VERSION_CHECK
+    -G
     >)
 
 target_link_libraries(EGSM PUBLIC link nd)
