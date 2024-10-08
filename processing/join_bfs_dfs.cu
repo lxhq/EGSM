@@ -484,19 +484,19 @@ __global__ void joinDFSGroupKernel(
     InitialOrder initial_order,                 // all mapped vertices are be stored in initial_order.u[], started from u[0], u[1], ...
     uint8_t next_u,                             // next query vertex to be mapped, UINT8_MAX if undefined
     uint8_t next_u_min_off,                     // next query edge to be mapped, UINT8_MAX if undefined
-    uint8_t max_depth,                          // number of maped vertices
+    uint8_t max_depth,                          // number of mapped vertices + total number of query vertices that going to be mapped in the round
     bool only_one_group,
     uint32_t *pending_count,
     uint32_t *lb_triggered
 ) {
     if (only_one_group && *new_res_size >= max_new_res_size) return;
 
-    __shared__ uint32_t result_queue[WARP_PER_BLOCK][MAX_VCOUNT][WARP_SIZE];
+    __shared__ uint32_t result_queue[WARP_PER_BLOCK][MAX_VCOUNT][WARP_SIZE];            // for each mapping query vertex, we have at most WARP_SIZE (32) candidates at one time
     __shared__ uint8_t queue_pos[WARP_PER_BLOCK][MAX_VCOUNT];
     __shared__ uint8_t queue_size[WARP_PER_BLOCK][MAX_VCOUNT];
     __shared__ uint32_t *intersection_input[WARP_PER_BLOCK][MAX_ECOUNT * 2];
     __shared__ uint32_t intersection_input_sizes[WARP_PER_BLOCK][MAX_ECOUNT * 2];
-    __shared__ uint32_t start[WARP_PER_BLOCK][MAX_VCOUNT];
+    __shared__ uint32_t start[WARP_PER_BLOCK][MAX_VCOUNT];                              // each warp will visit the next mapped 32 candidates each time, start is from 0 to max candidates. Special for the first vertex
     __shared__ int8_t depth[WARP_PER_BLOCK];
     __shared__ int8_t initial_depth[WARP_PER_BLOCK];
     __shared__ int8_t mask_index[WARP_PER_BLOCK];
@@ -576,7 +576,7 @@ __global__ void joinDFSGroupKernel(
     if (lane_id < depth[warp_id])
     {
         result_queue[warp_id][order[warp_id].u[lane_id]][order[warp_id].u[lane_id]] = 
-            C_MEMPOOL.array_[(res + global_warp_id * depth[warp_id] + lane_id) % C_MEMPOOL.capability_];
+            C_MEMPOOL.array_[(res + global_warp_id * depth[warp_id] + lane_id) % C_MEMPOOL.capability_];   // result_queue[warp_id][u][u] = v; v is mapped to u
     }
     __syncwarp();
     if (lane_id < C_NUM_VQ)
@@ -629,13 +629,14 @@ __global__ void joinDFSGroupKernel(
                         order[warp_id].u[depth[warp_id]] = next_u;
                         min_offs[warp_id][order[warp_id].u[depth[warp_id]]] = next_u_min_off;
                         mapped_vs[warp_id] |= (1 << order[warp_id].u[depth[warp_id]]);
-                        start[warp_id][order[warp_id].u[depth[warp_id]]] = global_warp_id * WARP_SIZE;
-
+                        start[warp_id][order[warp_id].u[depth[warp_id]]] = global_warp_id * WARP_SIZE; // there is a gap of 32 between the start of each warp
                         if (intersection_input_sizes[warp_id][min_offs[warp_id][order[warp_id].u[depth[warp_id]]]] == UINT32_MAX)
                         {
-                            intersection_input_sizes[warp_id][min_offs[warp_id][order[warp_id].u[depth[warp_id]]]] = 
-                                min(tries_vsizes[min_offs[warp_id][order[warp_id].u[depth[warp_id]]]],
+                            intersection_input_sizes[warp_id][min_offs[warp_id][order[warp_id].u[depth[warp_id]]]] =  // I guess it is the max vertex each warp will be accessed
+                                min(tries_vsizes[min_offs[warp_id][order[warp_id].u[depth[warp_id]]]],                // use min to make sure it won't exceed the max vertex of the trie
                                 start[warp_id][order[warp_id].u[depth[warp_id]]] + WARP_SIZE);
+                                // printf("start[%d][%d] = %d\n", warp_id, order[warp_id].u[depth[warp_id]], start[warp_id][order[warp_id].u[depth[warp_id]]]);
+                                // printf("tries_vsizes[%d] = %d\n", min_offs[warp_id][order[warp_id].u[depth[warp_id]]], tries_vsizes[min_offs[warp_id][order[warp_id].u[depth[warp_id]]]]);
                         }
                         else
                         {
@@ -686,6 +687,7 @@ __global__ void joinDFSGroupKernel(
                 
                 if (C_LB_ENABLE && intersection_input_sizes[warp_id][min_offs[warp_id][order[warp_id].u[depth[warp_id]]]] > 1024)
                 {
+                    // decide the number of warps to be used, each warp will handle 32 neighbors
                     uint32_t num_warp = DIV_CEIL(intersection_input_sizes[warp_id][min_offs[warp_id][order[warp_id].u[depth[warp_id]]]], 32);
                     cudaError_t cucheck_err = cudaSuccess;
                     if (lane_id == 0)
@@ -974,7 +976,7 @@ __global__ void joinDFSGroupKernel(
                 __syncwarp();
                 const uint32_t *min_array = 
                     intersection_input[warp_id][min_offs[warp_id][order[warp_id].u[depth[warp_id]]]] == NULL ?
-                    tries.compacted_vs_ + min_offs[warp_id][order[warp_id].u[depth[warp_id]]] * C_MAX_L_FREQ :
+                    tries.compacted_vs_ + min_offs[warp_id][order[warp_id].u[depth[warp_id]]] * C_MAX_L_FREQ : // if the vertex is first vertex, it won't have any neighbors
                     intersection_input[warp_id][min_offs[warp_id][order[warp_id].u[depth[warp_id]]]];
                 
                 const uint32_t& elem_index = start[warp_id][order[warp_id].u[depth[warp_id]]] + lane_id;
@@ -986,7 +988,7 @@ __global__ void joinDFSGroupKernel(
                     min_array,
                     min_offs[warp_id][order[warp_id].u[depth[warp_id]]],
                     start[warp_id][order[warp_id].u[depth[warp_id]]],
-                    C_ORDER_OFFS[order[warp_id].u[depth[warp_id]]],
+                    C_ORDER_OFFS[order[warp_id].u[depth[warp_id]]],              // represents the number of neighbors of the mapped vertex
                     C_ORDER_OFFS[order[warp_id].u[depth[warp_id]] + 1],
                     lane_id
                 );
@@ -1013,7 +1015,7 @@ __global__ void joinDFSGroupKernel(
                     auto rank = group.thread_rank();
                     if (depth[warp_id] == max_depth - 1)
                     {
-                        unsigned long long int write_pos = atomicAdd(new_res_size, 1ul);
+                        unsigned long long int write_pos = atomicAdd(new_res_size, 1ul);      // write_pos is different for different lanes
                         if (only_one_group && write_pos < max_new_res_size)
                         {
 #ifdef DEBUG
@@ -1076,7 +1078,7 @@ __global__ void joinDFSGroupKernel(
 #endif
                 }
                 __syncwarp();
-                if (depth[warp_id] < max_depth - 1 && queue_size[warp_id][order[warp_id].u[depth[warp_id]]] > 0)
+                if (depth[warp_id] < max_depth - 1 && queue_size[warp_id][order[warp_id].u[depth[warp_id]]] > 0)   // if this is not the final vertex and there are some matchings, dfs to the next vertex
                 {
                     // update intersection_input and intersection_input_sizes for unmapped vertices
                     uint32_t cur_v = result_queue[warp_id][order[warp_id].u[depth[warp_id]]][0];

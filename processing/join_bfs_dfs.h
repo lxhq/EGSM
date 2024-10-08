@@ -12,13 +12,13 @@
 
 
 __forceinline__ __device__ void set_next_u(
-    uint16_t& mapped_vs,
-    uint32_t start[MAX_VCOUNT],
-    uint32_t intersection_input_sizes[MAX_ECOUNT * 2],
-    uint32_t tries_vsizes[MAX_ECOUNT * 2],
-    uint8_t& next_order,
-    uint8_t min_offs[MAX_VCOUNT],
-    int8_t& mask_index,
+    uint16_t& mapped_vs,                                              // All mapped query vertices, bitmap, 1 means mapped
+    uint32_t start[MAX_VCOUNT],                                       // All elements in start are 0
+    uint32_t intersection_input_sizes[MAX_ECOUNT * 2],                // The size of neighbors of all mapped vertices
+    uint32_t tries_vsizes[MAX_ECOUNT * 2],                            // Number of candidates keys for each query edges
+    uint8_t& next_order,                                              // Next query vertex to be mapped, UINT8_MAX if undecided
+    uint8_t min_offs[MAX_VCOUNT],                                     // Next query edge, UINT8_MAX if undecided. Will be set to the min neighbor edge id of next vertex
+    int8_t& mask_index,                                               // The group index that is currently working on
     const GraphUtils& s_utils,
     uint32_t warp_id,
     uint32_t lane_id
@@ -43,16 +43,16 @@ __forceinline__ __device__ void set_next_u(
     if (lane_id < C_NUM_VQ)
     {
         extendable = (
-            s_utils.nbrbits_[lane_id] & mapped_vs) && 
-            (~mapped_vs & (1 << lane_id)) && 
-            (c_plan.masks_[mask_index] & (1 << lane_id)
+            s_utils.nbrbits_[lane_id] & mapped_vs) &&                 // query vertex lane_id is a neighbor of any mapped vertex
+            (~mapped_vs & (1 << lane_id)) &&                          // query vertex lane_id is not mapped yet
+            (c_plan.masks_[mask_index] & (1 << lane_id)               // query vertex lane_id is in the current group
         );
     }
     __syncwarp();
     // 2. get the estimated candidate set size of each extenable vertex
     if (extendable)
     {
-        nbr_bits = s_utils.nbrbits_[lane_id] & mapped_vs;
+        nbr_bits = s_utils.nbrbits_[lane_id] & mapped_vs;             // get all mapped vertices that are neighbors of lane_id
         while (nbr_bits)
         {
             // iterate over each mapped vertex
@@ -67,7 +67,7 @@ __forceinline__ __device__ void set_next_u(
             printf("lane_id=%d, local_offs=%d\n", lane_id, local_offs);
 #endif
 
-            if (intersection_input_sizes[local_offs] < can_size)
+            if (intersection_input_sizes[local_offs] < can_size)      // get the minimum neighbor size and the corresponding query edge id
             {
                 can_size = intersection_input_sizes[local_offs];
                 local_min_offs = local_offs;
@@ -77,7 +77,7 @@ __forceinline__ __device__ void set_next_u(
 #endif
             }
         }
-        nbr_bits = s_utils.nbrbits_[lane_id] & (~mapped_vs);
+        nbr_bits = s_utils.nbrbits_[lane_id] & (~mapped_vs);          // get all unmapped vertices that are neighbors of lane_id
         while (nbr_bits)
         {
             // iterate over each unmapped vertex
@@ -92,7 +92,7 @@ __forceinline__ __device__ void set_next_u(
             printf("lane_id=%d, local_offs=%d\n", lane_id, local_offs);
 #endif
 
-            if (tries_vsizes[local_offs] < can_size)
+            if (tries_vsizes[local_offs] < can_size)                   // get the minimum candidate set size and the corresponding query edge id
             {
                 can_size = tries_vsizes[local_offs];
                 local_min_offs = local_offs;
@@ -174,8 +174,8 @@ __forceinline__ __device__ void map_new_v(
     uint32_t u,                                            // the mapped query vertex
     uint32_t v,                                            // the data vertex that the query vertex u is mapped to
     uint16_t mapped_vs,                                    // all mapped query vertices, bitmap, 1 means mapped
-    uint32_t *intersection_input[MAX_ECOUNT * 2],
-    uint32_t intersection_input_sizes[MAX_ECOUNT * 2],
+    uint32_t *intersection_input[MAX_ECOUNT * 2],          
+    uint32_t intersection_input_sizes[MAX_ECOUNT * 2],     // the size of neighbors of all mapped vertices
     const GraphUtils& s_utils,
     uint32_t warp_id,
     uint32_t lane_id

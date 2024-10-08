@@ -17,7 +17,7 @@ uint8_t EIDX[MAX_VCOUNT * MAX_VCOUNT];
 uint16_t NBRBIT[MAX_VCOUNT];
 
 __constant__ bool C_ADAPTIVE_ORDERING;
-__constant__ bool C_LB_ENABLE;
+__constant__ bool C_LB_ENABLE;              //LB: load balancing
 
 __constant__ uint32_t C_NUM_VQ;
 __constant__ uint32_t C_NUM_EQ;
