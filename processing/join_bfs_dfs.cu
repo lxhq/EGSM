@@ -481,29 +481,29 @@ __global__ void joinDFSGroupKernel(
     PoolElem new_res,                           // pointer to the storage of new matching results
     unsigned long long int max_new_res_size,    // maximum size of the new matching results
     unsigned long long int *new_res_size,       // pointer to the actual size of the new matching results
-    InitialOrder initial_order,                 // all mapped vertices are be stored in initial_order.u[], started from u[0], u[1], ...
+    InitialOrder initial_order,                 // all mapped vertices are stored in initial_order.u[], started from u[0], u[1], ...
     uint8_t next_u,                             // next query vertex to be mapped, UINT8_MAX if undefined
     uint8_t next_u_min_off,                     // next query edge to be mapped, UINT8_MAX if undefined
-    uint8_t max_depth,                          // number of mapped vertices + total number of query vertices that going to be mapped in the round
-    bool only_one_group,
+    uint8_t max_depth,                          // number of mapped vertices + total number of query vertices that going to be mapped in this call
+    bool only_one_group,                        // false, if remaining groups are all combined due to limited storage. Otherwise, true
     uint32_t *pending_count,
     uint32_t *lb_triggered
 ) {
     if (only_one_group && *new_res_size >= max_new_res_size) return;
 
-    __shared__ uint32_t result_queue[WARP_PER_BLOCK][MAX_VCOUNT][WARP_SIZE];            // for each mapping query vertex, we have at most WARP_SIZE (32) candidates at one time
-    __shared__ uint8_t queue_pos[WARP_PER_BLOCK][MAX_VCOUNT];
-    __shared__ uint8_t queue_size[WARP_PER_BLOCK][MAX_VCOUNT];
-    __shared__ uint32_t *intersection_input[WARP_PER_BLOCK][MAX_ECOUNT * 2];
-    __shared__ uint32_t intersection_input_sizes[WARP_PER_BLOCK][MAX_ECOUNT * 2];
+    __shared__ uint32_t result_queue[WARP_PER_BLOCK][MAX_VCOUNT][WARP_SIZE];            // candidate vertices
+    __shared__ uint8_t queue_pos[WARP_PER_BLOCK][MAX_VCOUNT];                           // candidate position
+    __shared__ uint8_t queue_size[WARP_PER_BLOCK][MAX_VCOUNT];                          // candidate size
+    __shared__ uint32_t *intersection_input[WARP_PER_BLOCK][MAX_ECOUNT * 2];            // pointers to all mapped vertices' neighbors
+    __shared__ uint32_t intersection_input_sizes[WARP_PER_BLOCK][MAX_ECOUNT * 2];       // sizes of all mapped vertices' neighbors
     __shared__ uint32_t start[WARP_PER_BLOCK][MAX_VCOUNT];                              // each warp will visit the next mapped 32 candidates each time, start is from 0 to max candidates. Special for the first vertex
-    __shared__ int8_t depth[WARP_PER_BLOCK];
-    __shared__ int8_t initial_depth[WARP_PER_BLOCK];
+    __shared__ int8_t depth[WARP_PER_BLOCK];                                            // current depth
+    __shared__ int8_t initial_depth[WARP_PER_BLOCK];                                    // total number of mapped vertices (pervious depth)
     __shared__ int8_t mask_index[WARP_PER_BLOCK];
 
-    __shared__ uint32_t num_partial_results[WARP_PER_BLOCK][MAX_VCOUNT];
-    __shared__ unsigned long long int next_partial_result_progress[WARP_PER_BLOCK];
-    __shared__ uint32_t *next_ptr[WARP_PER_BLOCK];
+    __shared__ uint32_t num_partial_results[WARP_PER_BLOCK][MAX_VCOUNT];                // count of partial results, used for look-after load balancing
+    __shared__ unsigned long long int next_partial_result_progress[WARP_PER_BLOCK];     // used for look-ahead load balancing
+    __shared__ uint32_t *next_ptr[WARP_PER_BLOCK];                                      // used for look-ahead load balancing
 
     // dynamic ordering
     __shared__ InitialOrder order[WARP_PER_BLOCK];

@@ -23,7 +23,7 @@ int main(int argc, char** argv) {
     CLI::App app{"App description"};
 
     std::string query_path, data_path, method = "BFS-DFS";
-    bool filtering_3rd = true, adaptive_ordering = true, load_balancing = true;
+    bool filtering_3rd = false, adaptive_ordering = false, load_balancing = false;
     uint32_t filtering_order_start_v = UINT32_MAX;
     uint32_t gpu_num = 0u;
     app.add_option("-q", query_path, "query graph path")->required();
