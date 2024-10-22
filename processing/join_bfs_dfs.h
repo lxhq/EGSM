@@ -26,7 +26,7 @@ __forceinline__ __device__ void set_next_u(
     // 1. get all extendable vertices
     if (lane_id == 0)
     {
-        while (((~mapped_vs) & c_plan.masks_[mask_index]) == 0)
+        while (((~mapped_vs) & c_plan.masks_[mask_index]) == 0)        // determine current group
         {
             mask_index ++;
             //printf("mask %d\n", mask_index);
@@ -174,7 +174,7 @@ __forceinline__ __device__ void map_new_v(
     uint32_t u,                                            // the mapped query vertex
     uint32_t v,                                            // the data vertex that the query vertex u is mapped to
     uint16_t mapped_vs,                                    // all mapped query vertices, bitmap, 1 means mapped
-    uint32_t *intersection_input[MAX_ECOUNT * 2],          
+    uint32_t *intersection_input[MAX_ECOUNT * 2],          // pointer to neighbors of all mapped vertices
     uint32_t intersection_input_sizes[MAX_ECOUNT * 2],     // the size of neighbors of all mapped vertices
     const GraphUtils& s_utils,
     uint32_t warp_id,

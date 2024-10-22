@@ -497,21 +497,21 @@ __global__ void joinDFSGroupKernel(
     __shared__ uint32_t *intersection_input[WARP_PER_BLOCK][MAX_ECOUNT * 2];            // pointers to all mapped vertices' neighbors
     __shared__ uint32_t intersection_input_sizes[WARP_PER_BLOCK][MAX_ECOUNT * 2];       // sizes of all mapped vertices' neighbors
     __shared__ uint32_t start[WARP_PER_BLOCK][MAX_VCOUNT];                              // each warp will visit the next mapped 32 candidates each time, start is from 0 to max candidates. Special for the first vertex
-    __shared__ int8_t depth[WARP_PER_BLOCK];                                            // current depth
+    __shared__ int8_t depth[WARP_PER_BLOCK];                                            // current depth, initialy equal to initial_depth
     __shared__ int8_t initial_depth[WARP_PER_BLOCK];                                    // total number of mapped vertices (pervious depth)
-    __shared__ int8_t mask_index[WARP_PER_BLOCK];
+    __shared__ int8_t mask_index[WARP_PER_BLOCK];                                       // initialied to 0, current group we are working on
 
     __shared__ uint32_t num_partial_results[WARP_PER_BLOCK][MAX_VCOUNT];                // count of partial results, used for look-after load balancing
     __shared__ unsigned long long int next_partial_result_progress[WARP_PER_BLOCK];     // used for look-ahead load balancing
     __shared__ uint32_t *next_ptr[WARP_PER_BLOCK];                                      // used for look-ahead load balancing
 
     // dynamic ordering
-    __shared__ InitialOrder order[WARP_PER_BLOCK];
-    __shared__ uint16_t mapped_vs[WARP_PER_BLOCK];
+    __shared__ InitialOrder order[WARP_PER_BLOCK];                                      // order are initialized by initial_order
+    __shared__ uint16_t mapped_vs[WARP_PER_BLOCK];                                      // all mapped vertices are set to 1
     __shared__ uint8_t min_offs[WARP_PER_BLOCK][MAX_VCOUNT];
 
     __shared__ GraphUtils s_utils;
-    __shared__ uint32_t tries_vsizes[MAX_ECOUNT * 2];
+    __shared__ uint32_t tries_vsizes[MAX_ECOUNT * 2];                                   // the size of all query edge candidates
 
     copyUtilsConstantToShared(s_utils);
     // move data to shared memory
@@ -573,7 +573,7 @@ __global__ void joinDFSGroupKernel(
     
     if (only_one_group && *new_res_size >= max_new_res_size) return;
     // fill in the initial partial result
-    if (lane_id < depth[warp_id])
+    if (lane_id < depth[warp_id])                                      // fill the candidate vertices
     {
         result_queue[warp_id][order[warp_id].u[lane_id]][order[warp_id].u[lane_id]] = 
             C_MEMPOOL.array_[(res + global_warp_id * depth[warp_id] + lane_id) % C_MEMPOOL.capability_];   // result_queue[warp_id][u][u] = v; v is mapped to u
@@ -684,7 +684,6 @@ __global__ void joinDFSGroupKernel(
                     lane_id
                 );
                 __syncwarp();
-                
                 if (C_LB_ENABLE && intersection_input_sizes[warp_id][min_offs[warp_id][order[warp_id].u[depth[warp_id]]]] > 1024)
                 {
                     // decide the number of warps to be used, each warp will handle 32 neighbors

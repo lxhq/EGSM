@@ -7,8 +7,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED True)
-# set(CMAKE_BUILD_TYPE RELEASE)
-set(CMAKE_BUILD_TYPE DEBUG)
+set(CMAKE_BUILD_TYPE RELEASE)
+# set(CMAKE_BUILD_TYPE DEBUG)
 
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(/usr/local/cuda-11.7/include)
@@ -79,7 +79,6 @@ target_compile_options(EGSM PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
     --generate-line-info
     -Xptxas=\"-v\"
     -DTHRUST_IGNORE_CUB_VERSION_CHECK
-    -G
     >)
 
 target_link_libraries(EGSM PUBLIC link nd)
